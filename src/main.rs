@@ -1,48 +1,23 @@
-use std::time::Duration;
+mod clock;
 
-use crossbeam::{channel::tick, select};
+use crossbeam::channel::bounded;
 
-enum ClockMessage {
-    Tick,
-    Stopped,
-}
-
-enum ClockCommand {
-    Start,
-    ChangeBPM(f32),
-    Stop
-}
-
-struct Clock {
-    bpm: f64,
-}
-impl Clock {
-    pub fn new(bpm: f64) -> Self {
-        Self {
-            bpm
-        }
-    }
-}
-
-pub fn run_clock(mut clock: Clock){
-    let ticker = tick(Duration::from_secs_f64(60.0 / (clock.bpm * 24.0)));
-
-    std::thread::spawn(move || {
-        loop {
-            select! {
-                recv(ticker) -> _ => println!("tick!")
-            }
-        }
-        
-    });
-}
-
-
+use crate::clock::{build_clock, run_clock};
 
 fn main() {
-    let clock = Clock::new(120.0);
+    let (clock_controller, clock) = build_clock();
+
+    let (tx, rx) = bounded(10);
+
+    clock_controller.add_sender(tx);
 
     run_clock(clock);
 
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    clock_controller.start();
+
+    loop {
+        if let Ok(msg) = rx.try_recv(){
+            println!("msg!, {:?}", msg);
+        }
+    }
 }
